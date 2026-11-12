@@ -6,7 +6,7 @@ Queue tasks (the part before the colon picks the project; options like model and
 
 ```
 /todo fix the 404 on the pricing page
-/todo app: move the logout button to the top right, sonnet low
+/todo app: move the logout button to the top right, sonnet, effort low
 /todo web: add legal links to the footer; api: log failed logins
 /todo web: redo the pricing table, sub-agent, sonnet, effort medium
 ```
