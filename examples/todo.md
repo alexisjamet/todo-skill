@@ -1,4 +1,6 @@
-# To do
+# Todo queue, as `/todo` shows it
+
+## acme/web
 
 - [>] `c4w` Checkout: show the shipping cost before the payment step (added 2026-11-12T09:14:52Z) (session 3fa9c1d2)
 - [~] `f8m` Footer: add the legal links (added 2026-11-12T09:31:07Z) (agent web-footer, branch claude/footer-legal-links, session 3fa9c1d2)
@@ -11,6 +13,6 @@
 - [x] `d6r` Find out why the nightly export is slow (added 2026-11-11T08:31:54Z) (done 2026-11-11T17:02:09Z, no PR: the export query misses an index, see the note)
   - The `orders.created_at` filter does a full scan; adding the index is a migration, queued as `m4v`.
 
-## For api
+## acme/api
 
 - [ ] `r9g` Rate-limit the `/export` endpoint (added 2026-11-12T11:26:58Z)

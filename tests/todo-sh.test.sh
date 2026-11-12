@@ -18,31 +18,32 @@ todo() { bash "$T" "$@"; }
 list() { todo -C "$1" read 2>/dev/null; }
 id_of() { list "$1" | sed -n "s/^- \[.\] \`\([a-z0-9]*\)\` $2.*/\1/p"; }
 
-git init -q --bare origin.git
-git clone -q origin.git a 2>/dev/null
-(cd a && git commit -q --allow-empty -m init && git push -q origin HEAD:main) 2>/dev/null
-git clone -q origin.git b 2>/dev/null
+git init -q -b main a && (cd a && git commit -q --allow-empty -m init)
+git -C a worktree add -q ../wt -b side 2>/dev/null
 
-check "no branch yet: empty list" '[ "$(list a)" = "# To do" ]'
-check "default branch" '[ "$(todo -C a default)" = "main" ]'
+check "no list yet: empty" '[ "$(list a)" = "# To do" ]'
+check "the list is kept in the git directory" '[ "$(todo -C a path)" = "$W/a/.git/todo.md" ]'
+check "a worktree of the clone uses the same list" '[ "$(todo -C wt path)" = "$W/a/.git/todo.md" ]'
+check "default branch, without a remote" '[ "$(todo -C a default)" = "main" ]'
+check "stamp: UTC time, epoch milliseconds, session tag" \
+  'todo stamp | grep -q "^20[0-9-]*T[0-9:]*Z [0-9]*000 aaaa1111$"'
 
 todo -C a add "Fix the 404 on /pricing" >/dev/null
 todo -C a add --opts "sub-agent, model: sonnet" "Redo the pricing table (v2)" >/dev/null
 todo -C a add --for api "Rate-limit the /export endpoint" >/dev/null
-todo -C b add "Search: stale results" >/dev/null
+todo -C wt add "Search: stale results" >/dev/null
 fix=$(id_of a "Fix the 404"); redo=$(id_of a "Redo")
 
 check "add: four lines, each with an id and a timestamp" \
   '[ "$(list a | grep -c "^- \[ \] \`[a-z][2-9][a-z]\` .* (added 20[0-9-]*T[0-9:]*Z)")" = 4 ]'
 check "add --opts: options after the timestamp" 'list a | grep -q "(added [^)]*) {sub-agent, model: sonnet}$"'
 check "add --for: under its heading" 'list a | sed -n "/^## For api/,\$p" | grep -q "Rate-limit"'
-check "the main checkout is untouched" \
-  '[ -z "$(git -C a status --short)" ] && [ "$(git -C a worktree list | wc -l)" -eq 1 ] && ! git -C a rev-parse -q --verify refs/heads/todo >/dev/null'
-check "commits skip CI" 'git -C a log -1 --format=%s origin/todo | grep -q "\[skip ci\]$"'
+check "nothing shows in the working tree, no lock or temp file is left" \
+  '[ -z "$(git -C a status --short)" ] && [ -z "$(ls -d a/.git/todo.md.* 2>/dev/null)" ]'
 
 todo -C a claim "$fix" >/dev/null
 check "claim: [>] with the session tag" 'list a | grep -q "^- \[>\] \`$fix\` .* (session aaaa1111)$"'
-TODO_SESSION=bbbb2222 todo -C b claim "$fix" >/dev/null 2>&1
+TODO_SESSION=bbbb2222 todo -C wt claim "$fix" >/dev/null 2>&1
 check "claim by another session: exit 3" '[ $? -eq 3 ]'
 todo -C a claim "$fix" >/dev/null 2>&1
 check "claim again by the owner: fine" '[ $? -eq 0 ]'
@@ -75,7 +76,7 @@ todo -C a drop nope >/dev/null 2>&1
 check "unknown line: exit 4" '[ $? -eq 4 ]'
 
 list a >l.md; base=$(todo -C a read 2>&1 >/dev/null | sed -n 's/^base: //p')
-todo -C b add "sneaks in" >/dev/null
+todo -C wt add "sneaks in" >/dev/null
 todo -C a write --base "$base" l.md >/dev/null 2>&1
 check "write on a stale base: exit 5" '[ $? -eq 5 ]'
 list a >l.md; base=$(todo -C a read 2>&1 >/dev/null | sed -n 's/^base: //p')
@@ -84,33 +85,23 @@ todo -C a write --base "$base" l.md >/dev/null
 check "write: hand-written lines get an id" 'list a | grep -q "^- \[ \] \`[a-z0-9]*\` written by hand$"'
 check "done lines older than a week are deleted" '! list a | grep -q -e "old (added" -e "its note"'
 
-for i in 1 2 3 4 5; do todo -C a add "par A$i" >/dev/null 2>&1 & todo -C b add "par B$i" >/dev/null 2>&1 & done; wait
+for i in 1 2 3 4 5; do todo -C a add "par A$i" >/dev/null 2>&1 & todo -C wt add "par B$i" >/dev/null 2>&1 & done; wait
 check "ten concurrent writers: no line lost" '[ "$(list a | grep -c " par [AB][1-5] ")" = 10 ]'
 check "ids are unique" '[ -z "$(list a | grep -o "^- \[.\] \`[a-z0-9]*\`" | cut -c7- | sort | uniq -d)" ]'
 race=$(id_of a "par A1")
 (TODO_SESSION=s1s1s1s1 todo -C a claim "$race" >/dev/null 2>&1; echo $? >r1) &
-(TODO_SESSION=s2s2s2s2 todo -C b claim "$race" >/dev/null 2>&1; echo $? >r2) &
+(TODO_SESSION=s2s2s2s2 todo -C wt claim "$race" >/dev/null 2>&1; echo $? >r2) &
 wait
 check "two sessions claim one line: one wins, one gets exit 3" '[ "$(sort r1 r2 | tr -d "\n")" = "03" ]'
 
-git init -q n && (cd n && git commit -q --allow-empty -m init)
-todo -C n add "local only" >/dev/null && todo -C n claim "local only" >/dev/null
-check "no remote: a local todo branch" 'git -C n show todo:.claude/todo.md | grep -q "^- \[>\] .*local only"'
+mkdir a/.git/todo.md.lock && touch -t 202001010000 a/.git/todo.md.lock
+todo -C a add "after a stale lock" >/dev/null 2>&1
+check "a lock left by a dead process is taken over" 'list a | grep -q "after a stale lock"'
 
-check "read needs no temporary file" 'TMPDIR=/nonexistent/dir todo -C a read 2>/dev/null | grep -q "^# To do"'
-TMPDIR=/nonexistent/dir todo -C a add "read-only tmp" >/dev/null 2>&1
-check "write with an unusable TMPDIR: falls back to the git directory" \
-  'list a | grep -q "read-only tmp" && [ -z "$(ls -d a/.git/todo-tmp.* 2>/dev/null)" ]'
-
-git -C b remote set-url origin "$W/gone.git"
-offline=$(todo -C b read 2>&1)
-check "read with the remote unreachable: the last copy, marked stale" \
-  'case "$offline" in stale:*"# To do"*) true ;; *) false ;; esac'
-todo -C b add "offline" >/dev/null 2>&1
-check "write with the remote unreachable: exit 2" '[ $? -eq 2 ]'
-
-check "hook: one line when items wait" '[ "$(cd a && CLAUDE_PROJECT_DIR="$W/a" todo hook | grep -c "pending")" = 1 ]'
-check "hook: silent outside a repository" '[ -z "$(CLAUDE_PROJECT_DIR="$W" todo hook 2>&1)" ]'
+TODO_FILE="$W/elsewhere/list.md" todo -C a add "custom path" >/dev/null
+check "TODO_FILE: another place for the list" 'grep -q "custom path" "$W/elsewhere/list.md"'
+todo -C "$W" read >/dev/null 2>&1
+check "outside a repository: exit 2" '[ $? -eq 2 ]'
 
 echo
 if [ "$fails" -eq 0 ]; then echo "all passed"; else echo "$fails failed"; exit 1; fi

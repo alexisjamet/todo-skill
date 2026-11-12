@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# todo.sh — read and change a project's to-do list on its `todo` branch.
+# todo.sh — the to-do queue as a local file, for sessions that cannot use the
+# Todo Queue artifact (no claude.ai login, artifacts turned off, headless runs).
 #
-# The list is one file (.claude/todo.md, or $TODO_FILE) on a branch that holds
-# nothing else. Every change is one commit pushed straight to that branch: no
-# checkout, no worktree, no local branch. A change is re-applied on the latest
-# list when another session pushed first, so two sessions never lose a line and
-# never both take the same task. With no `origin` remote the branch is local.
+# The list is one markdown file inside the repository's git directory
+# (<git-dir>/todo.md): never committed, never pushed, shared by every worktree
+# of the clone, private to this machine. Changes are made under a lock, so two
+# sessions never lose a line and never both take the same task.
 #
 # Usage: todo.sh [-C <repo>] <command> [args]
 #
-#   read                         print the list (stderr: base commit, writers;
-#                                offline, the last copy fetched, marked stale)
+#   stamp                        print "<UTC time> <epoch ms> <session tag>"
+#   read                         print the list (stderr: its base, for write)
 #   add [--for <project>] [--opts "<run options>"] <text>
 #   claim <id>                   [>] taken by this session
 #   agent <id> <name> <branch>   [~] handed to an agent of this session
@@ -21,21 +21,19 @@
 #   note <id> <text>             add a sub-bullet
 #   first <id>                   move to the top of its section
 #   drop <id>                    remove the line and its sub-bullets
-#   write --base <commit|none> <file>   replace the whole list (see read)
+#   write --base <base> <file>   replace the whole list (see read)
 #   default                      print the default branch
-#   session                      print this session's tag
-#   hook                         one line for a SessionStart hook
+#   path                         print where the list is kept
 #
 # <id> is the line's id, or a fragment of text found in exactly one line.
-# Exit codes: 0 ok, 2 git or network, 3 the task is taken, 4 no such line,
-# 5 the list changed since it was read, 64 usage.
+# Exit codes: 0 ok, 2 cannot read or write the list, 3 the task is taken,
+# 4 no such line, 5 the list changed since it was read, 64 usage.
 #
-# Environment: TODO_FILE (list path), TODO_SESSION (session tag, else taken
-# from CLAUDE_CODE_SESSION_ID), TODO_COMMIT_TRAILER (text appended to commit
-# messages).
+# Environment: TODO_FILE (another path for the list), TODO_SESSION (session
+# tag, else taken from CLAUDE_CODE_SESSION_ID).
 
 set -euo pipefail
-export GIT_TERMINAL_PROMPT=0 LC_ALL=C
+export LC_ALL=C
 
 repo=.
 while [ $# -gt 0 ]; do
@@ -47,28 +45,18 @@ done
 cmd=${1:-read}
 [ $# -gt 0 ] && shift
 
-LIST=${TODO_FILE:-.claude/todo.md}
-TIP=""
+LIST=""
 tmp=""
-trap '[ -z "$tmp" ] || rm -rf "$tmp"' EXIT
+locked=""
+trap '[ -z "$tmp" ] || rm -rf "$tmp"; [ -z "$locked" ] || rmdir "$LIST.lock" 2>/dev/null || true' EXIT
 
 die() { local code=$1; shift; echo "todo.sh: $*" >&2; exit "$code"; }
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-64}"; }
 g() { git -C "$repo" "$@"; }
-has_remote() { g remote get-url origin >/dev/null 2>&1; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 cutoff() { date -u -d '7 days ago' +%Y-%m-%d 2>/dev/null || date -u -v-7d +%Y-%m-%d; }
 one_line() { printf '%s' "$*" | tr '\n\r\t' '   '; }
-
-# Temporary files, only for commands that write. A sandboxed session may have
-# a read-only \$TMPDIR: the repository's git directory is then the fallback.
-mktmp() {
-  local gd
-  [ -z "$tmp" ] || return 0
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/todo.XXXXXX" 2>/dev/null) && return 0
-  gd=$(g rev-parse --absolute-git-dir 2>/dev/null) || die 2 "not a git repository: $repo"
-  tmp=$(mktemp -d "$gd/todo-tmp.XXXXXX" 2>/dev/null) || die 2 "no writable place for temporary files"
-}
+base_of() { if [ -f "$LIST" ]; then cksum <"$LIST" | tr -s ' \t' '-' ; else echo none; fi; }
 
 session_tag() {
   local s=${TODO_SESSION:-${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-}}}
@@ -81,8 +69,8 @@ default_branch() {
   if b=$(g symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null); then
     printf '%s\n' "${b#origin/}"; return 0
   fi
-  if has_remote; then
-    b=$(g ls-remote --symref origin HEAD 2>/dev/null | awk '$1 == "ref:" { sub("refs/heads/", "", $2); print $2; exit }') || b=""
+  if g remote get-url origin >/dev/null 2>&1; then
+    b=$(GIT_TERMINAL_PROMPT=0 g ls-remote --symref origin HEAD 2>/dev/null | awk '$1 == "ref:" { sub("refs/heads/", "", $2); print $2; exit }') || b=""
     if [ -n "$b" ]; then printf '%s\n' "$b"; return 0; fi
     for b in main master; do
       if g rev-parse -q --verify "refs/remotes/origin/$b" >/dev/null 2>&1; then printf '%s\n' "$b"; return 0; fi
@@ -91,80 +79,38 @@ default_branch() {
   g symbolic-ref -q --short HEAD 2>/dev/null
 }
 
-# Sets TIP to the todo branch's commit, or "" when the branch does not exist.
-# The fetch lands in a ref of this process alone: two sessions in the same
-# clone would otherwise fight over the lock of origin/todo.
-sync_tip() {
-  local err ref="refs/todo-sync/$$"
-  TIP=""
-  if has_remote; then
-    if err=$(g fetch -q --refmap= origin "+refs/heads/todo:$ref" 2>&1); then
-      TIP=$(g rev-parse "$ref")
-      g update-ref -d "$ref" >/dev/null 2>&1 || true
-      g update-ref refs/remotes/origin/todo "$TIP" >/dev/null 2>&1 || true
-    elif printf '%s' "$err" | grep -q "couldn't find remote ref"; then
-      TIP=""
-    elif [ -n "${TODO_STALE_OK:-}" ] && TIP=$(g rev-parse -q --verify refs/remotes/origin/todo 2>/dev/null); then
-      echo "stale: could not fetch the todo branch, this is the last copy fetched ($(printf '%s' "$err" | head -1))" >&2
-    else
-      die 2 "cannot fetch the todo branch: $err"
-    fi
-  else
-    TIP=$(g rev-parse -q --verify refs/heads/todo 2>/dev/null) || TIP=""
+# The list lives in the git directory shared by every worktree of the clone.
+locate() {
+  local gd
+  [ -z "$LIST" ] || return 0
+  if [ -n "${TODO_FILE:-}" ]; then LIST=$TODO_FILE; return 0; fi
+  gd=$(g rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gd=""
+  if [ -z "$gd" ]; then
+    gd=$(g rev-parse --git-common-dir 2>/dev/null) || die 2 "not a git repository: $repo"
+    case "$gd" in /*) ;; *) gd="$(cd "$repo" && cd "$gd" && pwd)" ;; esac
   fi
+  LIST="$gd/todo.md"
 }
 
-# Prints the list at TIP. No todo branch yet: the default branch's copy if it
-# has one (lists written before the todo branch existed), else an empty list.
-load_list() {
-  local d
-  if [ -n "$TIP" ]; then
-    if g cat-file -e "$TIP:$LIST" 2>/dev/null; then g show "$TIP:$LIST"; else printf '# To do\n'; fi
-    return 0
-  fi
-  if has_remote; then
-    d=$(default_branch) || d=""
-    if [ -n "$d" ] && g cat-file -e "refs/remotes/origin/$d:$LIST" 2>/dev/null; then
-      g show "refs/remotes/origin/$d:$LIST"; return 0
-    fi
-  fi
-  printf '# To do\n'
+load_list() { if [ -f "$LIST" ]; then cat "$LIST"; else printf '# To do\n'; fi; }
+
+# One writer at a time. A lock left by a killed process is taken over after a minute.
+lock() {
+  local i=0
+  mkdir -p "$(dirname "$LIST")" 2>/dev/null || die 2 "cannot write in $(dirname "$LIST")"
+  while ! mkdir "$LIST.lock" 2>/dev/null; do
+    i=$((i + 1))
+    if [ -n "$(find "$LIST.lock" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then rmdir "$LIST.lock" 2>/dev/null || true; continue; fi
+    [ -d "$LIST.lock" ] || [ "$i" -lt 3 ] || die 2 "cannot write in $(dirname "$LIST")"
+    [ "$i" -lt 150 ] || die 2 "the list stays locked: $LIST.lock"
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  locked=1
+  tmp=$(mktemp -d "$LIST.tmp.XXXXXX") || die 2 "cannot write in $(dirname "$LIST")"
 }
 
-# commit_list <file> <subject>: one commit on top of TIP, pushed to the todo
-# branch. Returns 1 when the push is refused (push output in $tmp/push.err).
-commit_list() {
-  local file=$1 subject=$2 blob idx tree commit msg
-  mktmp
-  blob=$(g hash-object -w -- "$file")
-  idx="$tmp/index"; rm -f "$idx"
-  if [ -n "$TIP" ]; then GIT_INDEX_FILE="$idx" git -C "$repo" read-tree "$TIP"; fi
-  GIT_INDEX_FILE="$idx" git -C "$repo" update-index --add --cacheinfo "100644,$blob,$LIST"
-  tree=$(GIT_INDEX_FILE="$idx" git -C "$repo" write-tree)
-  if [ -z "$(g config user.email 2>/dev/null || true)" ] && [ -z "${GIT_AUTHOR_EMAIL:-}" ]; then
-    export GIT_AUTHOR_NAME=todo GIT_AUTHOR_EMAIL=todo@localhost
-    export GIT_COMMITTER_NAME=todo GIT_COMMITTER_EMAIL=todo@localhost
-  fi
-  msg="$subject [skip ci]"
-  if [ -n "${TODO_COMMIT_TRAILER:-}" ]; then msg="$msg
-
-$TODO_COMMIT_TRAILER"; fi
-  if [ -n "$TIP" ]; then commit=$(g commit-tree "$tree" -p "$TIP" -m "$msg"); else commit=$(g commit-tree "$tree" -m "$msg"); fi
-  if has_remote; then
-    g push -q origin "$commit:refs/heads/todo" >"$tmp/push.err" 2>&1 || return 1
-    g update-ref refs/remotes/origin/todo "$commit" >/dev/null 2>&1 || true
-  else
-    g update-ref refs/heads/todo "$commit" "$TIP" 2>"$tmp/push.err" || return 1
-  fi
-  TIP=$commit
-}
-
-# Reads a list on stdin, applies TODO_OP, prints the new list. The changed line
-# goes to $TODO_REPORT. Exits 3 (taken) or 4 (no such line) with the reason on
-# stderr.
 transform() {
   local rc=0
-  mktmp
   awk '
 function isTask(l) { return l ~ /^- \[.\] / }
 function markOf(l) { return substr(l, 4, 1) }
@@ -313,43 +259,33 @@ END {
   awk '/^[ \t]*$/ { blank = 1; next } { if (blank && seen) print ""; blank = 0; seen = 1; print }' "$tmp/pass1"
 }
 
-# change <subject>: apply TODO_OP on the latest list and push, again on the
-# newer list each time another session pushed first.
+# change: apply TODO_OP to the list, under the lock.
 change() {
-  local subject=$1 try rc prev
-  mktmp
+  local rc=0
+  locate; lock
   export TODO_NOW TODO_CUTOFF TODO_SEED TODO_SESSION_TAG TODO_REPORT="$tmp/report"
-  TODO_NOW=$(now); TODO_CUTOFF=$(cutoff); TODO_SESSION_TAG=$(session_tag)
-  sync_tip
-  for try in 1 2 3 4 5 6 7 8 9 10; do
-    TODO_SEED=$((RANDOM * 32768 + RANDOM))
-    load_list >"$tmp/old"
-    : >"$tmp/report"
-    rc=0
-    transform <"$tmp/old" >"$tmp/new" || rc=$?
-    [ "$rc" -eq 0 ] || exit "$rc"
-    if [ -n "$TIP" ] && cmp -s "$tmp/old" "$tmp/new"; then
-      cat "$tmp/report"; return 0
-    fi
-    if commit_list "$tmp/new" "$subject"; then
-      cat "$tmp/report"; return 0
-    fi
-    prev=$TIP
-    sync_tip
-    [ "$TIP" != "$prev" ] || die 2 "the push to the todo branch was refused: $(cat "$tmp/push.err")"
-    sleep "0.$((RANDOM % 8 + 1))" 2>/dev/null || sleep 1
-  done
-  die 2 "the todo branch keeps changing: try again"
+  TODO_NOW=$(now); TODO_CUTOFF=$(cutoff); TODO_SESSION_TAG=$(session_tag); TODO_SEED=$((RANDOM * 32768 + RANDOM))
+  : >"$tmp/report"
+  load_list | transform >"$tmp/new" || rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  mv "$tmp/new" "$LIST"
+  cat "$tmp/report"
 }
 
 need() { [ "$1" -ge "$2" ] || usage; }
+need_session() { [ -n "$(session_tag)" ] || die 64 "no session id: set TODO_SESSION to this session's tag"; }
 
 case "$cmd" in
+  stamp)
+    ms=$(date -u +%s)000
+    echo "$(now) $ms $(session_tag)"
+    ;;
   read)
-    TODO_STALE_OK=1 sync_tip
-    load_list
-    echo "base: ${TIP:-none}" >&2
-    if [ -n "$TIP" ]; then echo "writers: $(g log --format='%an <%ae>' "$TIP" | sort -u | paste -sd, - | sed 's/,/, /g')" >&2; fi
+    locate; load_list
+    echo "base: $(base_of)" >&2
+    ;;
+  path)
+    locate; echo "$LIST"
     ;;
   add)
     TODO_FOR=""; TODO_OPTS=""
@@ -364,69 +300,48 @@ case "$cmd" in
     need $# 1
     export TODO_OP=add TODO_FOR TODO_OPTS TODO_TEXT
     TODO_TEXT=$(one_line "$*")
-    change "todo: add"
+    change
     ;;
   claim)
-    need $# 1
-    [ -n "$(session_tag)" ] || die 64 "no session id: set TODO_SESSION to this session's tag"
+    need $# 1; need_session
     export TODO_OP=claim TODO_ID=$1
-    change "todo: claim $1"
+    change
     ;;
   agent)
-    need $# 3
-    [ -n "$(session_tag)" ] || die 64 "no session id: set TODO_SESSION to this session's tag"
+    need $# 3; need_session
     export TODO_OP=agent TODO_ID=$1 TODO_AGENT=$2 TODO_BRANCH=$3
-    change "todo: $1 to agent $2"
+    change
     ;;
   done|ask|note)
     need $# 2
     export TODO_OP=$cmd TODO_ID=$1 TODO_TEXT
     shift; TODO_TEXT=$(one_line "$*")
-    change "todo: $cmd $TODO_ID"
+    change
     ;;
   release)
     need $# 1
     export TODO_OP=release TODO_ID=$1 TODO_TEXT
     shift; TODO_TEXT=$(one_line "$*")
-    change "todo: release $TODO_ID"
+    change
     ;;
   merged|first|drop)
     need $# 1
     export TODO_OP=$cmd TODO_ID=$1
-    change "todo: $cmd $1"
+    change
     ;;
   write)
     [ $# -eq 3 ] && [ "$1" = "--base" ] || usage
     [ -f "$3" ] || die 64 "no such file: $3"
-    mktmp
+    locate; lock
+    [ "$(base_of)" = "$2" ] || die 5 "the list changed since it was read: read it again"
     export TODO_OP=none TODO_NOW TODO_CUTOFF TODO_SEED=$((RANDOM * 32768 + RANDOM)) TODO_SESSION_TAG="" TODO_REPORT=""
     TODO_NOW=$(now); TODO_CUTOFF=$(cutoff)
-    sync_tip
-    [ "${TIP:-none}" = "$2" ] || die 5 "the list changed since it was read (now ${TIP:-none}): read it again"
     transform <"$3" >"$tmp/new"
-    commit_list "$tmp/new" "todo: rewrite" || die 5 "the list changed while writing: read it again"
-    echo "written: $TIP"
+    mv "$tmp/new" "$LIST"
+    echo "written"
     ;;
   default)
     default_branch || die 2 "cannot tell the default branch"
-    ;;
-  session)
-    session_tag; echo
-    ;;
-  hook)
-    # Never fails and never blocks a session start.
-    {
-      cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-      repo=.
-      g rev-parse --git-dir >/dev/null 2>&1 || exit 0
-      list=$(sync_tip 2>/dev/null && load_list 2>/dev/null) || exit 0
-      pending=$(printf '%s\n' "$list" | grep -c '^- \[ \] ' || true)
-      blocked=$(printf '%s\n' "$list" | grep -c '^- \[?\] ' || true)
-      running=$(printf '%s\n' "$list" | grep -c '^- \[[>~]\] ' || true)
-      [ $((pending + blocked + running)) -gt 0 ] || exit 0
-      name=$(basename "$(g rev-parse --show-toplevel 2>/dev/null || pwd)")
-      echo "To-do list of $name (branch todo): $pending pending, $running in progress, $blocked blocked on a question. The user can type /todo to see it. This is information: start nothing from the list unless the user asks."
-    } || exit 0
     ;;
   -h|--help|help) usage 0 ;;
   *) usage ;;
