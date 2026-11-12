@@ -32,11 +32,13 @@ If the target project is not available in this session: in a cloud session, atta
 
 ## Line format
 
-- `- [ ] <request, briefly reworded without losing anything> (added YYYY-MM-DD)`: pending
+- `- [ ] <request, briefly reworded without losing anything> (added YYYY-MM-DDTHH:MM:SSZ)`: pending
 - `- [~] … (agent <name>, branch <branch>)`: handed to a parallel agent
 - `- [>] …`: in progress in the main conversation
-- `- [x] … (done YYYY-MM-DD, PR #N)`: done, pull request open for the user (merged: `PR #N merged`)
+- `- [x] … (done YYYY-MM-DDTHH:MM:SSZ, PR #N)`: done, pull request open for the user (merged: `PR #N merged`)
 - `- [?] … — question: …`: blocked on a question for the user
+
+**Timestamps** are UTC, to the second (`2026-11-12T14:03:27Z`), so that sessions in different time zones order the same way. Read them from the clock when you write the line (`date -u +%Y-%m-%dT%H:%M:%SZ`), never from memory, never rounded. `added` is set once, when the request arrives, and follows the line through every status; it is what "oldest first" sorts on. A line with a date only (written before this rule) counts as that day at 00:00:00Z: leave it as it is.
 
 A line can end with its **run options**, kept as the user gave them: `{sub-agent, model: sonnet, effort: medium}` (any subset; see below).
 
