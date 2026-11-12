@@ -1,0 +1,10 @@
+{
+  "name": "todo",
+  "version": "1.0.0",
+  "description": "Queue tasks for one or several projects without interrupting the current work, and run independent ones in parallel with background agents.",
+  "author": { "name": "alexisjamet", "url": "https://github.com/alexisjamet" },
+  "homepage": "https://github.com/alexisjamet/todo-skill",
+  "repository": "https://github.com/alexisjamet/todo-skill",
+  "license": "MIT",
+  "keywords": ["todo", "queue", "multi-project", "parallel", "agents", "skill"]
+}
