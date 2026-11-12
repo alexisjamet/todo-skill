@@ -30,7 +30,7 @@ Statuses:
 | `[>]` | in progress in the main conversation |
 | `[~]` | handed to a parallel agent |
 | `[?]` | blocked on a question for you |
-| `[x]` | done, PR open for you (kept 7 days) |
+| `[x]` | done, PR open for you, with its URL on the line (kept 7 days) |
 
 See [`examples/todo.md`](examples/todo.md) for a list in practice and [`skills/todo/SKILL.md`](skills/todo/SKILL.md) for the full behaviour.
 
