@@ -12,6 +12,15 @@ Queue tasks (the part before the colon picks the project; options like model and
 /todo api: [subagent, haiku, low] fix the typos in the error messages
 ```
 
+Or queue several tasks with a single `/todo`, one per line:
+
+```
+/todo
+- web: add a dark mode toggle in the settings
+- web: [subagent, sonnet, low] fix the broken image on the home page
+- api: return 404 instead of 500 for unknown users
+```
+
 Look at the queue:
 
 ```
