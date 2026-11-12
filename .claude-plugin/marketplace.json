@@ -5,7 +5,7 @@
     {
       "name": "todo",
       "source": "./",
-      "description": "Queue tasks for one or several projects without interrupting the current work, and run independent ones in parallel with background agents."
+      "description": "Queue tasks for one or several projects without interrupting the current work, and run independent ones in parallel with background agents; work ends in open pull requests."
     }
   ]
 }
