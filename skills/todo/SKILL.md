@@ -35,10 +35,12 @@ If the target project is not available in this session: in a cloud session, atta
 - `- [ ] <request, briefly reworded without losing anything> (added YYYY-MM-DDTHH:MM:SSZ)`: pending
 - `- [~] … (agent <name>, branch <branch>)`: handed to a parallel agent
 - `- [>] …`: in progress in the main conversation
-- `- [x] … (done YYYY-MM-DDTHH:MM:SSZ, PR #N)`: done, pull request open for the user (merged: `PR #N merged`)
+- `- [x] … (done YYYY-MM-DDTHH:MM:SSZ, PR <URL>)`: done, pull request open for the user (merged: `PR <URL> merged`)
 - `- [?] … — question: …`: blocked on a question for the user
 
 **Timestamps** are UTC, to the second (`2026-11-12T14:03:27Z`), so that sessions in different time zones order the same way. Read them from the clock when you write the line (`date -u +%Y-%m-%dT%H:%M:%SZ`), never from memory, never rounded. `added` is set once, when the request arrives, and follows the line through every status; it is what "oldest first" sorts on. A line with a date only (written before this rule) counts as that day at 00:00:00Z: leave it as it is.
+
+The **PR** is always written as its full URL (`https://github.com/<owner>/<repo>/pull/<N>`), never as a bare `#N`: the list is read from other sessions and can hold another project's items (`## For <project>`), where a number alone does not say which repository it belongs to, and a URL opens in one click.
 
 A line can end with its **run options**, kept as the user gave them: `{sub-agent, model: sonnet, effort: medium}` (any subset; see below).
 
@@ -77,26 +79,26 @@ It knows only what you write. Give it:
 - where to work: a branch `claude/<short topic>` from an up-to-date `origin/<default>`, in its own worktree — for another project, `git -C <project> worktree add <scratch dir>/<branch> -b <branch> origin/<default>` — never in a checkout the main conversation uses;
 - the rules: do the task completely, tests included; update the project's docs as its instructions require; run the project's check command (from its instructions, else its `package.json` scripts, `Makefile`, CI config…) until green; commit, push **its own branch** and **open the PR — never merge it, never push to the default branch, never deploy**; never touch the to-do list;
 - if it hits a choice that belongs to the user: do not decide, push what is done, and say so in its report;
-- its final report, short: PR number, what changed, what it could not do, any questions.
+- its final report, short: the PR's URL, what changed, what it could not do, any questions.
 
 ## When an agent reports back
 
 Between two steps of your own task:
 1. Rebase its branch on `origin/<default>`, resolve conflicts, rerun the check, push the branch.
-2. Mark the line `[x]` with the PR number, and list the PR in your next report.
+2. Mark the line `[x]` with the PR's URL, and list the PR in your next report.
 3. If it raised a question: `[?]` line, question asked to the user in your next report.
 4. An agent finished: rerun the triage on the `[ ]` lines of every project, oldest first.
 
 ## When your own task is done
 
-1. Open its PR and mark it `[x]` with the PR number.
+1. Open its PR and mark it `[x]` with the PR's URL.
 2. Take the oldest `[ ]` line that does not touch a part handed to an agent — in the current project first, then in the others — mark it `[>]`, announce it in one line ("Next (<project>): … (N left)") and start it right away, without waiting for confirmation. A line with run options goes to an agent instead (`[~]`), and you take the next one. Before that, rerun the triage: other lines may start in parallel.
 3. A request too ambiguous to do safely: `[?]` with the question, and move on to the next one. Ask all the questions at the end.
 4. Every list empty and no agent running: say so in one line in the final report, with the PRs left open for the user.
 
 ## Merging and deploying
 
-**Never**, unless the user explicitly asks — in the conversation, or in a project's instructions (`CLAUDE.md`, `AGENTS.md`) that say the work is merged or deployed without asking. A request to merge covers the PRs it names, nothing more. When merging, go **one PR at a time per project**: rebase, rerun the check, merge, then deploy only if that was asked too (two deployments at once can put an older default branch back in production). Mark the line `PR #N merged`.
+**Never**, unless the user explicitly asks — in the conversation, or in a project's instructions (`CLAUDE.md`, `AGENTS.md`) that say the work is merged or deployed without asking. A request to merge covers the PRs it names, nothing more. When merging, go **one PR at a time per project**: rebase, rerun the check, merge, then deploy only if that was asked too (two deployments at once can put an older default branch back in production). Mark the line `PR <URL> merged`.
 
 ## Rules
 
