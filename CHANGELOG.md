@@ -6,7 +6,8 @@ Releases are tagged `vX.Y.Z`, and the same number is the `version` in `.claude-p
 
 ### Fixed
 
-- The frontmatter of `SKILL.md` was not valid YAML: its description held an unquoted `: `. Claude Code loaded it all the same, but strict parsers refused it, GitHub's preview among them. The description is now quoted, and `allowed-tools` is a list.
+- The frontmatter of `SKILL.md` was not valid YAML: its description held an unquoted `: `. Claude Code loaded it all the same, but strict parsers refused it, GitHub's preview among them. The description and `allowed-tools` are now quoted strings.
+- The description held angle brackets (`/todo <task>`), which claude.ai reports as XML tags when it syncs the plugin and strips from the text it stores. It now says the same thing in words.
 
 ## 2.0.0 — 2026-11-12
 
