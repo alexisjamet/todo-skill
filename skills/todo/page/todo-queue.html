@@ -1,0 +1,323 @@
+<title>Todo Queue</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="todo-queue-schema" content="1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column, like a terminal list. Each task is a row led by
+   the bracket mark the skill writes ([ ] [>] [~] [?] [x]); projects are
+   plain headings; the form to add a task sits at the top, where a queue is fed. */
+:root {
+  --bg: #f4f6f8; --surface: #ffffff; --line: #dde2e8; --fg: #18212b; --muted: #5d6b7a;
+  --accent: #175e7a; --accent-fg: #ffffff; --accent-soft: #e3eff4;
+  --run: #1f6fb5; --ask: #9a5b00; --ask-soft: #fdf1dc; --ok: #2c7a4b; --danger: #b3261e;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161b; --surface: #1a2027; --line: #2c353f; --fg: #e6ebf0; --muted: #94a2b0;
+    --accent: #6fc0de; --accent-fg: #0b1a21; --accent-soft: #1b3440;
+    --run: #7bb6ee; --ask: #f0b454; --ask-soft: #3a2c12; --ok: #74c794; --danger: #f2877f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161b; --surface: #1a2027; --line: #2c353f; --fg: #e6ebf0; --muted: #94a2b0;
+  --accent: #6fc0de; --accent-fg: #0b1a21; --accent-soft: #1b3440;
+  --run: #7bb6ee; --ask: #f0b454; --ask-soft: #3a2c12; --ok: #74c794; --danger: #f2877f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+header { display: flex; flex-direction: column; gap: 4px; }
+h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.counts { color: var(--muted); font-variant-numeric: tabular-nums; margin: 0; }
+.counts strong { color: var(--fg); font-weight: 600; }
+.notice { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); }
+.notice.warn { border-color: var(--ask); color: var(--ask); background: var(--ask-soft); }
+
+form.add { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) auto; gap: 8px; }
+@media (max-width: 560px) { form.add { grid-template-columns: minmax(0, 1fr); } }
+input[type="text"] {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-width: 0; width: 100%;
+}
+input[type="text"]::placeholder { color: var(--muted); }
+button {
+  font: inherit; font-weight: 500; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); padding: 8px 12px; cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.small { font-size: 13px; padding: 3px 8px; color: var(--muted); }
+button.small:hover { color: var(--fg); }
+button.danger { border-color: var(--danger); color: var(--danger); }
+button:disabled { opacity: 0.55; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters button { font-size: 13px; padding: 4px 10px; border-radius: 999px; color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+
+section.project { display: flex; flex-direction: column; gap: 8px; }
+h2 { font-family: var(--mono); font-size: 14px; font-weight: 500; margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+ul.tasks { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+ul.tasks > li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
+ul.tasks > li:first-child { border-top: 0; }
+.mark { font-family: var(--mono); font-weight: 500; white-space: pre; color: var(--muted); }
+li[data-status="claimed"] .mark, li[data-status="agent"] .mark { color: var(--run); }
+li[data-status="blocked"] .mark { color: var(--ask); }
+li[data-status="done"] .mark { color: var(--ok); }
+.body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.text { margin: 0; overflow-wrap: anywhere; }
+li[data-status="done"] .text { color: var(--muted); }
+.meta { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta a { color: var(--accent); overflow-wrap: anywhere; }
+.meta .state { color: var(--run); }
+.question { margin: 2px 0 0; padding: 8px 10px; border-radius: 6px; background: var(--ask-soft); color: var(--fg); display: flex; flex-direction: column; gap: 6px; }
+.question p { margin: 0; overflow-wrap: anywhere; }
+.question p b { color: var(--ask); font-weight: 600; }
+.question form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+ul.notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+ul.notes li { overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+details.done > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 2px 0; }
+details.done > ul.tasks { margin-top: 8px; }
+.empty { margin: 0; padding: 22px 16px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); text-align: center; }
+.empty code { font-family: var(--mono); color: var(--fg); }
+footer { color: var(--muted); font-size: 13px; }
+footer code { font-family: var(--mono); }
+@media (prefers-reduced-motion: no-preference) { button { transition: background-color .12s, border-color .12s, color .12s; } }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Todo Queue</h1>
+    <p class="counts" id="counts">Loading your queue…</p>
+  </header>
+
+  <p class="notice" id="notice" hidden></p>
+
+  <form class="add" id="add-form" autocomplete="off">
+    <input type="text" id="add-project" list="projects" placeholder="owner/repo" aria-label="Project">
+    <input type="text" id="add-text" placeholder="A task for Claude to pick up" aria-label="Task">
+    <button class="primary" type="submit" id="add-submit">Add to queue</button>
+    <datalist id="projects"></datalist>
+  </form>
+
+  <div class="filters" id="filters" hidden></div>
+
+  <div id="list">
+    <p class="empty">Nothing here yet. Type <code>/todo &lt;task&gt;</code> in a Claude Code session, or add a task above.</p>
+  </div>
+
+  <footer>
+    Only you can read this list. Claude takes tasks from the top; <code>[&gt;]</code> is in progress in a session, <code>[~]</code> is with an agent, <code>[?]</code> waits for your answer.
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var MARK = { pending: "[ ]", claimed: "[>]", agent: "[~]", blocked: "[?]", done: "[x]" };
+  var RANK = { claimed: 0, agent: 0, pending: 1, blocked: 2, done: 3 };
+  var state = { tasks: [], col: null, filter: "", loaded: false, confirmDrop: "" };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function el(tag, attrs, children) {
+    var n = document.createElement(tag), k;
+    for (k in (attrs || {})) {
+      if (k === "text") n.textContent = attrs[k];
+      else if (k === "on") for (var ev in attrs.on) n.addEventListener(ev, attrs.on[ev]);
+      else n.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function notice(text, warn) {
+    var n = $("notice");
+    n.hidden = !text; n.textContent = text || ""; n.className = "notice" + (warn ? " warn" : "");
+  }
+  function stamp(d) { return d.toISOString().replace(/\.\d+Z$/, "Z"); }
+  function when(iso) {
+    var t = Date.parse(iso); if (isNaN(t)) return iso || "";
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 90) return "just now";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago";
+    return Math.round(s / 86400) + " d ago";
+  }
+  function newId() {
+    var L = "abcdefghjkmnpqrstuvwxyz", D = "23456789", id, taken;
+    var pick = function (s) { return s[Math.floor(Math.random() * s.length)]; };
+    do {
+      id = pick(L) + pick(D) + pick(L);
+      taken = state.tasks.some(function (t) { return t.id === id; });
+    } while (taken);
+    return id;
+  }
+  function write(promise) {
+    return promise.then(function () { notice(""); }, function (e) {
+      notice("That change was not saved (" + ((e && e.code) || "error") + "). Try again.", true);
+    });
+  }
+  function ref(id) { return state.col.doc(id); }
+  function notesOf(t) { return Array.isArray(t.notes) ? t.notes.slice() : []; }
+
+  function addTask(project, text) {
+    var id = newId();
+    return write(ref(id).set({ project: project, text: text, status: "pending", added: stamp(new Date()), order: Date.now() }));
+  }
+  function answer(t, text) {
+    var notes = notesOf(t);
+    notes.push("Question: " + (t.question || ""));
+    notes.push("Answer: " + text);
+    return write(ref(t.id).update({ status: "pending", question: "", notes: notes }));
+  }
+  function moveFirst(t) {
+    var min = state.tasks.reduce(function (m, x) { return typeof x.order === "number" && x.order < m ? x.order : m; }, Date.now());
+    return write(ref(t.id).update({ order: min - 1 }));
+  }
+  function release(t) {
+    var notes = notesOf(t);
+    notes.push("Released from the page (was with session " + (t.session || "?") + ")");
+    return write(ref(t.id).update({ status: "pending", session: "", agent: "", branch: "", notes: notes }));
+  }
+  function drop(t) { return write(ref(t.id).delete()); }
+
+  function taskRow(t) {
+    var status = MARK[t.status] ? t.status : "pending";
+    var meta = [el("span", { text: t.id }), el("span", { text: "added " + when(t.added), title: t.added || "" })];
+    if (status === "claimed") meta.push(el("span", { class: "state", text: "in session " + (t.session || "?") }));
+    if (status === "agent") meta.push(el("span", { class: "state", text: "agent " + (t.agent || "?") + (t.branch ? " on " + t.branch : "") + " · session " + (t.session || "?") }));
+    if (t.opts) meta.push(el("span", { text: "{" + t.opts + "}" }));
+    if (status === "done") {
+      meta.push(el("span", { text: "done " + when(t.done), title: t.done || "" }));
+      if (/^https:\/\//.test(t.pr || "")) meta.push(el("a", { href: t.pr, target: "_blank", rel: "noopener", text: t.pr.replace(/^https:\/\/github\.com\//, "") + (t.merged ? " (merged)" : "") }));
+      else if (t.result) meta.push(el("span", { text: t.result }));
+    }
+    var body = [el("p", { class: "text", text: t.text || "" }), el("p", { class: "meta" }, meta)];
+
+    if (status === "blocked") {
+      var input = el("input", { type: "text", id: "answer-" + t.id, placeholder: "Your answer", "aria-label": "Answer" });
+      body.push(el("div", { class: "question" }, [
+        el("p", {}, [el("b", { text: "Question  " }), document.createTextNode(t.question || "")]),
+        el("form", { on: { submit: function (e) { e.preventDefault(); var v = input.value.trim(); if (v) answer(t, v); } } },
+          [input, el("button", { type: "submit", text: "Send answer" })])
+      ]));
+    }
+    var notes = notesOf(t);
+    if (notes.length) body.push(el("ul", { class: "notes" }, notes.map(function (n) { return el("li", { text: String(n) }); })));
+
+    var actions = [];
+    if (status === "pending") actions.push(el("button", { class: "small", type: "button", text: "Do next", on: { click: function () { moveFirst(t); } } }));
+    if (status === "claimed" || status === "agent") actions.push(el("button", { class: "small", type: "button", text: "Free this task", title: "Use it when that session is over", on: { click: function () { release(t); } } }));
+    if (state.confirmDrop === t.id) {
+      actions.push(el("button", { class: "small danger", type: "button", text: "Remove for good", on: { click: function () { state.confirmDrop = ""; drop(t); } } }));
+      actions.push(el("button", { class: "small", type: "button", text: "Keep", on: { click: function () { state.confirmDrop = ""; render(); } } }));
+    } else {
+      actions.push(el("button", { class: "small", type: "button", text: "Remove", on: { click: function () { state.confirmDrop = t.id; render(); } } }));
+    }
+    body.push(el("div", { class: "actions" }, actions));
+    return el("li", { "data-status": status }, [el("span", { class: "mark", "aria-label": status, text: MARK[status] }), el("div", { class: "body" }, body)]);
+  }
+
+  function render() {
+    var tasks = state.tasks, n = { run: 0, pending: 0, blocked: 0 };
+    tasks.forEach(function (t) {
+      if (t.status === "claimed" || t.status === "agent") n.run++;
+      else if (t.status === "blocked") n.blocked++;
+      else if (t.status !== "done") n.pending++;
+    });
+    var counts = $("counts");
+    counts.textContent = "";
+    if (!state.loaded) counts.textContent = "Loading your queue…";
+    else if (!tasks.length) counts.textContent = "Empty queue.";
+    else [[n.pending, "pending"], [n.run, "in progress"], [n.blocked, "waiting for your answer"]].forEach(function (c, i) {
+      if (i) counts.appendChild(document.createTextNode(" · "));
+      counts.appendChild(el("strong", { text: String(c[0]) }));
+      counts.appendChild(document.createTextNode(" " + c[1]));
+    });
+
+    var projects = [];
+    tasks.forEach(function (t) { var p = t.project || "(no project)"; if (projects.indexOf(p) < 0) projects.push(p); });
+    projects.sort();
+    var dl = $("projects"); dl.textContent = "";
+    projects.forEach(function (p) { dl.appendChild(el("option", { value: p })); });
+    if (state.filter && projects.indexOf(state.filter) < 0) state.filter = "";
+
+    var filters = $("filters"); filters.textContent = ""; filters.hidden = projects.length < 2;
+    [""].concat(projects).forEach(function (p) {
+      filters.appendChild(el("button", { type: "button", "aria-pressed": String(state.filter === p), text: p || "All projects",
+        on: { click: function () { state.filter = p; render(); } } }));
+    });
+
+    var list = $("list"); list.textContent = "";
+    if (!tasks.length) {
+      var empty = el("p", { class: "empty" });
+      if (!state.loaded) empty.textContent = "Loading your queue…";
+      else { empty.appendChild(document.createTextNode("Nothing here yet. Type ")); empty.appendChild(el("code", { text: "/todo <task>" })); empty.appendChild(document.createTextNode(" in a Claude Code session, or add a task above.")); }
+      list.appendChild(empty); return;
+    }
+    var wrap = el("div", { style: "display:flex;flex-direction:column;gap:22px" });
+    projects.forEach(function (p) {
+      if (state.filter && state.filter !== p) return;
+      var mine = tasks.filter(function (t) { return (t.project || "(no project)") === p; });
+      mine.sort(function (a, b) {
+        var r = (RANK[a.status] == null ? 1 : RANK[a.status]) - (RANK[b.status] == null ? 1 : RANK[b.status]);
+        if (r) return r;
+        if (a.status === "done") return String(b.done || "").localeCompare(String(a.done || ""));
+        return (a.order || 0) - (b.order || 0);
+      });
+      var open = mine.filter(function (t) { return t.status !== "done"; });
+      var done = mine.filter(function (t) { return t.status === "done"; });
+      var kids = [el("h2", { text: p })];
+      if (open.length) kids.push(el("ul", { class: "tasks" }, open.map(taskRow)));
+      if (done.length) kids.push(el("details", { class: "done" }, [el("summary", { text: done.length + " done" }), el("ul", { class: "tasks" }, done.map(taskRow))]));
+      wrap.appendChild(el("section", { class: "project" }, kids));
+    });
+    list.appendChild(wrap);
+  }
+
+  $("add-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!state.col) return;
+    var project = $("add-project").value.trim(), text = $("add-text").value.trim();
+    if (!project || !text) { notice("Give a project and a task.", true); return; }
+    $("add-text").value = "";
+    addTask(project, text);
+  });
+
+  function unavailable(text) {
+    state.loaded = true; render(); notice(text, true);
+    $("add-submit").disabled = true;
+  }
+
+  async function start() {
+    render();
+    if (!window.claude || !window.claude.use) return unavailable("Open this page on claude.ai to see your queue.");
+    var caps = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    var db = caps[0], user = caps[1];
+    if (!db || !user) return unavailable("Your queue is not available in this view. Sign in to claude.ai and open the page again.");
+    var uid = await user.id();
+    if (!uid) return unavailable("You are not signed in, so there is no queue to show.");
+    state.col = db.doc("data/users/" + uid + "/todo").collection("tasks");
+    var slow = setTimeout(function () { notice("The queue can't be reached yet. It will appear as soon as it answers."); }, 10000);
+    state.col.onSnapshot(function (snap) {
+      state.tasks = snap.docs.map(function (d) { var t = Object.assign({}, d.data()); t.id = d.id; return t; });
+      state.loaded = true;
+      if (!snap.metadata.fromCache) { clearTimeout(slow); if (!$("notice").classList.contains("warn")) notice(""); }
+      render();
+    }, function (e) {
+      clearTimeout(slow);
+      unavailable("The queue stopped answering (" + ((e && e.code) || "error") + "). Reload the page.");
+    });
+  }
+  start();
+})();
+</script>

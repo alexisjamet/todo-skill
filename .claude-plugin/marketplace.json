@@ -1,6 +1,7 @@
 {
   "name": "todo-skill",
   "owner": { "name": "alexisjamet", "url": "https://github.com/alexisjamet" },
+  "metadata": { "description": "A to-do queue for Claude Code: add tasks while it works, across projects, with parallel agents." },
   "plugins": [
     {
       "name": "todo",

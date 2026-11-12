@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: show-the-list
+description: /todo alone shows the list, with another session's line marked as such, and changes nothing.
+tags: [show]
+context:
+  scaffold_script: fixture.sh
