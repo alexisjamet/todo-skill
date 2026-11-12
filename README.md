@@ -64,7 +64,7 @@ Earlier versions kept the list on a `todo` branch of each repository. The skill 
 /plugin install todo@todo-skill
 ```
 
-The skill is then `/todo:todo`, and plain `/todo` works too unless another command already has that name. You receive a new release when the `version` in `.claude-plugin/plugin.json` changes.
+The skill is then `/todo:todo`, and plain `/todo` works too unless another command already has that name. You receive a new release when the `version` in `.claude-plugin/plugin.json` changes; releases are tagged and listed in the [changelog](CHANGELOG.md).
 
 **As a plain skill**, for all your projects:
 
