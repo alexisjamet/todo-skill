@@ -82,8 +82,8 @@ Wherever the queue lives, show a task as one line, in the user's language, top o
 
 ## Run options: sub-agent, model, effort
 
-A request can say how it must be run, **at its end** or in braces (`…, sub-agent, sonnet, effort medium` · `… {haiku}`). The same words inside the sentence are part of the task (`add a sonnet option to the settings page`): leave them there.
-- **`sub-agent`**: the task is done by an agent, never in the main conversation;
+A request can say how it must be run, **at its end** or in brackets anywhere (`…, sub-agent, sonnet, effort medium` · `… {haiku}` · `[subagent, sonnet, low] …`). Inside brackets or braces, a bare level (`low`, `max`…) is the effort. The same words inside the sentence are part of the task (`add a sonnet option to the settings page`): leave them there.
+- **`sub-agent`** (or `subagent`): the task is done by an agent, never in the main conversation;
 - **model**: the model that agent runs on: `opus`, `sonnet`, `haiku` or `fable`. The `Agent` tool takes these aliases only: turn a full model ID into its alias;
 - **effort** (also called thinking): `low`, `medium`, `high`, `xhigh` or `max`.
 

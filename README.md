@@ -2,13 +2,14 @@
 
 A [Claude Code](https://code.claude.com) skill that lets you **queue tasks while Claude is working**, for one or several projects at once, without interrupting what is under way — and that **starts independent tasks in parallel** with background agents.
 
-Queue tasks (the part before the colon picks the project; options like model and effort go at the end):
+Queue tasks (the part before the colon picks the project; options like model and effort go at the end, or in brackets):
 
 ```
 /todo fix the 404 on the pricing page
 /todo app: move the logout button to the top right, sonnet, effort low
 /todo web: add legal links to the footer; api: log failed logins
 /todo web: redo the pricing table, sub-agent, sonnet, effort medium
+/todo [subagent, haiku, low] api: fix the typos in the error messages
 ```
 
 Look at the queue:
