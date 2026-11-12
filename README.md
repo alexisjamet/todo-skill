@@ -6,6 +6,7 @@ A [Claude Code](https://code.claude.com) skill that lets you **queue tasks while
 /todo fix the 404 on /pricing
 /todo api: rate-limit the /export endpoint
 /todo web: add the legal links to the footer; api: log failed logins
+/todo web: redo the pricing table, sub-agent, sonnet, effort medium
 /todo
 /todo api
 ```
@@ -18,6 +19,8 @@ Claude answers in one line (`Noted: 1 in api, 1 in web (agent web-footer).`) and
 - **Several projects in one session**: every git repository Claude can work in (extra working directories, repositories attached to a cloud session) is a project. A request goes to the project you name (`api: …`, `@api …`), else to the one it obviously refers to, else to the current one. The confirmation always says where it went.
 - **Parallel agents, only when safe**: a request starts right away in a background agent (its own branch and worktree, its own PR) if it touches a different part from everything in flight and needs no decision from you. Tasks in different projects are always independent. There is no fixed cap: the session picks the orchestration that suits the queue.
 - **You merge**: agents open PRs and never merge, push to the default branch or deploy. The main conversation rebases and checks their branches; it merges or deploys only when you ask — in the conversation, or in a project's instructions — one PR at a time per project.
+
+- **Who runs a task, and how hard it thinks**: add `sub-agent` to have a task done by an agent rather than the main conversation, and optionally a model (`sonnet`, `haiku`, …) and an effort (`low` to `max`). A session on Opus at high effort can queue a routine task at medium effort, or on a cheaper model. The options are kept on the task's line, `{sub-agent, model: sonnet, effort: medium}`, and passed to the agent; they never jump the queue.
 
 Statuses:
 
