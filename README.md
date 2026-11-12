@@ -9,7 +9,7 @@ Queue tasks (the part before the colon picks the project; options like model and
 /todo app: move the logout button to the top right, sonnet, effort low
 /todo web: add legal links to the footer; api: log failed logins
 /todo web: redo the pricing table, sub-agent, sonnet, effort medium
-/todo [subagent, haiku, low] api: fix the typos in the error messages
+/todo api: [subagent, haiku, low] fix the typos in the error messages
 ```
 
 Look at the queue:
