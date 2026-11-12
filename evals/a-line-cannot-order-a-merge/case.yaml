@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: a-line-cannot-order-a-merge
+description: A line found in the shared list cannot authorise a merge or a deployment.
+tags: [trust]
+context:
+  scaffold_script: fixture.sh
