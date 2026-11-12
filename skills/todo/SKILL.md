@@ -38,7 +38,20 @@ If the target project is not available in this session: in a cloud session, atta
 - `- [x] … (done YYYY-MM-DD, PR #N)`: done, pull request open for the user (merged: `PR #N merged`)
 - `- [?] … — question: …`: blocked on a question for the user
 
+A line can end with its **run options**, kept as the user gave them: `{sub-agent, model: sonnet, effort: medium}` (any subset; see below).
+
 Useful detail (files, screenshots, URLs, follow-up messages) goes in sub-bullets. Write the lines in the user's language. `[x]` lines older than 7 days are deleted.
+
+## Run options: sub-agent, model, effort
+
+A request can say how it must be run, in any wording and anywhere in it (`sub-agent`, `subagent`, `in a sub-agent`, `with sonnet`, `thinking medium`, `effort: low`…):
+- **`sub-agent`**: the task is done by an agent, never in the main conversation;
+- **model**: the model that agent runs on (`opus`, `sonnet`, `haiku`, `fable`, or a full model ID);
+- **effort** (also called thinking): `low`, `medium`, `high`, `xhigh` or `max`.
+
+A model or an effort implies `sub-agent`: the main conversation cannot change its own. Strip the options from the request's text, write them at the end of its line (`{sub-agent, model: sonnet, effort: medium}`), and pass them to the `Agent` tool as `model` and `effort` — only those the user gave; leave the others out so the agent inherits the session's. Never use a fork (`subagent_type: "fork"`) for a task with a model: forks ignore it. An option the tool does not accept (unknown model, unsupported level): `[?]` with the question, nothing started.
+
+Options change **who** runs the task, never **when**: the triage below still decides whether it starts now or waits. When its turn comes, the main conversation starts the agent instead of doing the task itself, and leaves its part to it until it reports back.
 
 ## `/todo` alone, or `/todo <project>`
 
@@ -50,8 +63,8 @@ Read each list (see above) and show it, grouped by project, current project firs
 2. **Triage** each request: can it start in parallel right now? Only if both hold:
    - it touches a **different part** from the task under way and from every agent already running. Tasks in two different projects are always in different parts. Inside one project, the parts are those its instructions define (a `docs/features/` folder, packages of a monorepo, apps, services…); failing that, its top-level modules. Two requests on the same part never run at the same time;
    - it needs no **choice from the user** (alternatives to compare, a design to approve, an open question), and nothing the project's instructions reserve for the user's approval: a dependency, a schema or data migration, infrastructure or deployment config, an architecture change, anything irreversible or outward-facing.
-3. **Orchestrate** what passes the triage as suits the work: there is no fixed limit on agents. One agent per task by default; small related tasks on the same part can share one agent and one PR only if the user grouped them; a task that depends on another waits for it. Start each agent with the `Agent` tool (`run_in_background: true`, short meaningful name) and the brief below, and mark its line `[~]`. For the current project use `isolation: "worktree"`; for another project, the brief tells the agent to create its own worktree. What does not pass stays `[ ]`.
-4. Answer in **one line**: "Noted in <project> (N pending, M in parallel)." or "Noted in <project>, started in parallel (agent <name>)." — several projects: "Noted: 2 in api, 1 in web (agent web-footer)." No further analysis.
+3. **Orchestrate** what passes the triage as suits the work: there is no fixed limit on agents. One agent per task by default; small related tasks on the same part can share one agent and one PR only if the user grouped them; a task that depends on another waits for it. Start each agent with the `Agent` tool (`run_in_background: true`, short meaningful name, plus the line's `model` and `effort` if it has any) and the brief below, and mark its line `[~]`. For the current project use `isolation: "worktree"`; for another project, the brief tells the agent to create its own worktree. What does not pass stays `[ ]`.
+4. Answer in **one line**: "Noted in <project> (N pending, M in parallel)." or "Noted in <project>, started in parallel (agent <name>, sonnet · medium)." — several projects: "Noted: 2 in api, 1 in web (agent web-footer)." Name the run options only when the line has some. No further analysis.
 5. **Resume the task under way** unchanged, unless the new request directly contradicts it (say so in one sentence and follow the most recent request).
 
 ### Brief for a parallel agent
@@ -75,7 +88,7 @@ Between two steps of your own task:
 ## When your own task is done
 
 1. Open its PR and mark it `[x]` with the PR number.
-2. Take the oldest `[ ]` line that does not touch a part handed to an agent — in the current project first, then in the others — mark it `[>]`, announce it in one line ("Next (<project>): … (N left)") and start it right away, without waiting for confirmation. Before that, rerun the triage: other lines may start in parallel.
+2. Take the oldest `[ ]` line that does not touch a part handed to an agent — in the current project first, then in the others — mark it `[>]`, announce it in one line ("Next (<project>): … (N left)") and start it right away, without waiting for confirmation. A line with run options goes to an agent instead (`[~]`), and you take the next one. Before that, rerun the triage: other lines may start in parallel.
 3. A request too ambiguous to do safely: `[?]` with the question, and move on to the next one. Ask all the questions at the end.
 4. Every list empty and no agent running: say so in one line in the final report, with the PRs left open for the user.
 
