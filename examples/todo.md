@@ -6,7 +6,7 @@
   - Seen on iPhone Safari only; screenshot in the issue tracker.
 - [ ] Pricing table: redo it in the new grid (added 2026-11-12T10:48:19Z) {sub-agent, model: sonnet, effort: medium}
 - [?] Pricing page: new plan names (added 2026-11-12T11:05:33Z) — question: keep "Pro" or rename it "Team"?
-- [x] Login: the "Forgot password" link opened a blank page (added 2026-11-11T08:20:11Z) (done 2026-11-11T15:47:26Z, PR #42)
+- [x] Login: the "Forgot password" link opened a blank page (added 2026-11-11T08:20:11Z) (done 2026-11-11T15:47:26Z, PR https://github.com/acme/web/pull/42)
 
 ## For api
 
