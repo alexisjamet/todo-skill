@@ -1,10 +1,7 @@
 ---
 name: todo
-description: "Queue tasks for one or several projects without interrupting the current work, and run independent ones in parallel with background agents. Use when the user types /todo <task> (one or several tasks, for any project), /todo alone to see every project's list, or /todo <project> to see one. Adds each item to the user's personal to-do queue, confirms in one line, starts parallel agents when tasks are independent of everything in flight, and carries on with what was under way. Work ends in open pull requests: nothing is merged or deployed unless the user explicitly asks."
-allowed-tools:
-  - ArtifactData
-  - Bash(bash ${CLAUDE_SKILL_DIR}/scripts/todo.sh *)
-  - 'Bash(bash "${CLAUDE_SKILL_DIR}/scripts/todo.sh" *)'
+description: "Queue tasks for one or several projects without interrupting the current work, and run independent ones in parallel with background agents. Use when the user types /todo followed by a task (one or several tasks, for any project), /todo alone to see every project's list, or /todo followed by a project name to see one. Adds each item to the user's personal to-do queue, confirms in one line, starts parallel agents when tasks are independent of everything in flight, and carries on with what was under way. Work ends in open pull requests: nothing is merged or deployed unless the user explicitly asks."
+allowed-tools: 'ArtifactData Bash(bash ${CLAUDE_SKILL_DIR}/scripts/todo.sh *) Bash(bash "${CLAUDE_SKILL_DIR}/scripts/todo.sh" *)'
 ---
 
 # /todo — a task queue across projects, with parallel agents

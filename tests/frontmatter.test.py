@@ -32,6 +32,11 @@ for path in files:
         if path.endswith("SKILL.md"):
             for key in ("name", "description"):
                 assert isinstance(data.get(key), str) and data[key], f"{key} is missing"
+            # claude.ai refuses XML-like tags in a description and caps it at 1024 characters.
+            assert "<" not in data["description"] and ">" not in data["description"], "description holds angle brackets"
+            assert len(data["description"]) <= 1024, "description is longer than 1024 characters"
+            # The Agent Skills format wants allowed-tools as one space-separated string.
+            assert isinstance(data.get("allowed-tools", ""), str), "allowed-tools is not a string"
     except (yaml.YAMLError, AssertionError) as error:
         failed += 1
         print("FAIL", path, "-", " ".join(str(error).split())[:200])
