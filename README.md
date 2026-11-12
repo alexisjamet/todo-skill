@@ -97,7 +97,13 @@ The skill reads each project's instructions rather than hard-coding anything. In
 bash tests/todo-sh.test.sh
 ```
 
-checks the helper script against a throwaway repository (concurrent writers included). [`evals/`](evals/README.md) holds behaviour cases for `claude plugin eval`.
+checks the helper script against a throwaway repository (concurrent writers included), and
+
+```bash
+python3 tests/frontmatter.test.py
+```
+
+checks that every frontmatter parses as strict YAML. [`evals/`](evals/README.md) holds behaviour cases for `claude plugin eval`.
 
 ## License
 

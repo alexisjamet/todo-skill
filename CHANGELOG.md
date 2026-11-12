@@ -2,6 +2,12 @@
 
 Releases are tagged `vX.Y.Z`, and the same number is the `version` in `.claude-plugin/plugin.json`: plugin users receive a release when it changes. Versions follow [semantic versioning](https://semver.org): a major version changes where the queue lives or how it is written, a minor one adds behaviour, a patch fixes.
 
+## 2.0.1 — 2026-11-12
+
+### Fixed
+
+- The frontmatter of `SKILL.md` was not valid YAML: its description held an unquoted `: `. Claude Code loaded it all the same, but strict parsers refused it, GitHub's preview among them. The description is now quoted, and `allowed-tools` is a list.
+
 ## 2.0.0 — 2026-11-12
 
 The queue becomes personal and leaves the repositories.
