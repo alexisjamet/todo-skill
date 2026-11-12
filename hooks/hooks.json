@@ -1,0 +1,17 @@
+{
+  "description": "Tells a new session how many to-do items its project has waiting",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/todo/scripts/todo.sh\" hook",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
